@@ -1,11 +1,11 @@
-# Uart Async
+# Serial Async
 
-A lightweight and flexible UART driver library that provides register-level access through generic interfaces. By implementing these interfaces, users can create asynchronous UART drivers for various platforms with ease.
+A lightweight and flexible serial driver library that provides register-level access through generic interfaces. By implementing these interfaces, users can create asynchronous serial drivers for various platforms with ease.
 
 ## 📌 Features
 
 - **Register-Level Abstraction**: Offers low-level register-like control while maintaining usability.
-- **Asynchronous Read/Write Support**: Enables non-blocking data transmission and reception using interrupts and uart FIFO.
+- **Asynchronous Read/Write Support**: Enables non-blocking data transmission and reception using interrupts and device FIFO.
 - **Highly Portable**: Abstracted hardware layer allows easy adaptation to different MCUs or SoCs.
 - **Modular Design**: Clean architecture suitable for integration into existing embedded projects.
 - **Full-Duplex Communication**: Supports simultaneous sending and receiving, automatically controlling the lifecycle of the transmitter and receiver.
@@ -36,21 +36,22 @@ fn handle_irq() {
 }
 
 async fn use() {
-    let mut uart = Uart::new(your_registers_impl);
+    let mut serial = Serial::new(your_registers_impl);
 
-    let handler = uart.irq_handler.take().unwrap();
+    let handler = serial.irq_handler.take().unwrap();
     HANDLER.set(handler).unwrap();
 
-    // Will fail if the TX is taken.
-    let mut tx = uart.try_take_tx().unwrap();
+    // If the TX has already been taken, it will fail.
+    let mut tx = serial.try_take_tx().unwrap();
+    let mut rx = serial.try_take_rx().unwrap();
 
     tx.write_all(b"hello!").await.unwrap();
 
-    // Tx will give back to uart.
+    // The TX will be given back to serial.
     drop(tx);
 
     // Can take tx again.
-    let mut tx = uart.try_take_tx().unwrap();
+    let mut tx = serial.try_take_tx().unwrap();
 }
 ```
 

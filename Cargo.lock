@@ -249,6 +249,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "serial-async"
+version = "0.1.1"
+dependencies = [
+ "futures",
+ "tokio",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -311,14 +319,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "uart-async"
-version = "0.1.1"
-dependencies = [
- "futures",
- "tokio",
 ]
 
 [[package]]

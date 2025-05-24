@@ -69,14 +69,14 @@ pub trait Registers: Clone + 'static {
     fn clean_irq_event(&self, event: IrqEvent);
 }
 
-pub struct Uart<R: Registers> {
+pub struct Serial<R: Registers> {
     registers: R,
     tx: ChData,
     rx: ChData,
     pub irq_handler: Option<IrqHandler<R>>,
 }
 
-impl<R: Registers> Uart<R> {
+impl<R: Registers> Serial<R> {
     pub fn new(registers: R) -> Self {
         let tx = ChData::new();
         let rx = ChData::new();
@@ -107,7 +107,7 @@ impl<R: Registers> Uart<R> {
         })
     }
 
-    /// Returns the irq state of this [`Uart`].
+    /// Returns the irq state of this [`Serial`].
     ///
     /// # Safety
     ///
@@ -116,7 +116,7 @@ impl<R: Registers> Uart<R> {
         self.registers.get_irq_event()
     }
 
-    /// Cleans the irq state of this [`Uart`].
+    /// Cleans the irq state of this [`Serial`].
     ///
     /// # Safety
     ///
@@ -153,7 +153,7 @@ impl<R: Registers> IrqHandler<R> {
     }
 }
 
-unsafe impl<R: Registers> Send for Uart<R> {}
+unsafe impl<R: Registers> Send for Serial<R> {}
 unsafe impl<R: Registers> Send for Sender<R> {}
 unsafe impl<R: Registers> Send for Receiver<R> {}
 

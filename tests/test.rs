@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use uart_async::{IrqEvent, Registers, Uart};
+use serial_async::*;
 
 const FIFO_MAX: usize = 4;
 
@@ -86,7 +86,7 @@ impl Registers for FakeUart {
         regs.tx_fifo.len() < FIFO_MAX
     }
 
-    fn put(&self, c: u8) -> Result<(), uart_async::ErrorKind> {
+    fn put(&self, c: u8) -> Result<(), ErrorKind> {
         let mut regs = self.registers.lock().unwrap();
         if regs.tx_fifo.len() == FIFO_MAX {
             panic!("tx fifo overflow");
@@ -101,14 +101,12 @@ impl Registers for FakeUart {
         !regs.rx_fifo.is_empty()
     }
 
-    fn get(&self) -> Result<u8, uart_async::ErrorKind> {
+    fn get(&self) -> Result<u8, ErrorKind> {
         let mut regs = self.registers.lock().unwrap();
-        regs.rx_fifo
-            .pop_front()
-            .ok_or(uart_async::ErrorKind::Overrun)
+        regs.rx_fifo.pop_front().ok_or(ErrorKind::Overrun)
     }
 
-    fn get_irq_event(&self) -> uart_async::IrqEvent {
+    fn get_irq_event(&self) -> IrqEvent {
         let regs = self.registers.lock().unwrap();
 
         IrqEvent {
@@ -117,7 +115,7 @@ impl Registers for FakeUart {
         }
     }
 
-    fn clean_irq_event(&self, event: uart_async::IrqEvent) {
+    fn clean_irq_event(&self, event: IrqEvent) {
         println!("clean_irq_event");
         let mut regs = self.registers.lock().unwrap();
         if event.can_put {
@@ -131,7 +129,7 @@ impl Registers for FakeUart {
 
 #[test]
 fn test_take() {
-    let mut uart = Uart::new(FakeUart::new(&[]));
+    let mut uart = Serial::new(FakeUart::new(&[]));
     let tx = uart.try_take_tx().unwrap();
     let e = uart.try_take_tx();
     assert!(e.is_none());
@@ -146,7 +144,7 @@ fn test_tx() {
 
     let fake_data = fake.registers.clone();
 
-    let mut uart = Uart::new(fake);
+    let mut uart = Serial::new(fake);
 
     let mut tx = uart.try_take_tx().unwrap();
 
@@ -171,7 +169,7 @@ async fn test_tx_async() {
     let irq_fn = fake.irq_fn.clone();
     let fake_data = fake.registers.clone();
 
-    let mut uart = Uart::new(fake);
+    let mut uart = Serial::new(fake);
     let handler = uart.irq_handler.take().unwrap();
     {
         let mut g = irq_fn.lock().unwrap();
@@ -204,7 +202,7 @@ async fn test_rx_async() {
     let fake = FakeUart::new(&in_data);
     let irq_fn = fake.irq_fn.clone();
 
-    let mut uart = Uart::new(fake);
+    let mut uart = Serial::new(fake);
     let handler = uart.irq_handler.take().unwrap();
     {
         let mut g = irq_fn.lock().unwrap();
