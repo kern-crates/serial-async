@@ -1,0 +1,184 @@
+#![cfg_attr(not(test), no_std)]
+
+extern crate alloc;
+
+use alloc::sync::Arc;
+use core::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct IrqEvent {
+    pub rx: bool,
+    pub tx: bool,
+}
+
+/// Serial error kind.
+///
+/// This represents a common set of serial operation errors. HAL implementations are
+/// free to define more specific or additional error types. However, by providing
+/// a mapping to these common serial errors, generic code can still react to them.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[non_exhaustive]
+pub enum ErrorKind {
+    /// The peripheral receive buffer was overrun.
+    Overrun,
+    /// Received data does not conform to the peripheral configuration.
+    /// Can be caused by a misconfigured device on either end of the serial line.
+    FrameFormat,
+    /// Parity check failed.
+    Parity,
+    /// Serial line is too noisy to read valid data.
+    Noise,
+    /// Device was closed.
+    Closed,
+    /// A different error occurred. The original error may contain more information.
+    Other,
+}
+
+impl core::error::Error for ErrorKind {}
+
+impl core::fmt::Display for ErrorKind {
+    #[inline]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::Overrun => write!(f, "The peripheral receive buffer was overrun"),
+            Self::Parity => write!(f, "Parity check failed"),
+            Self::Noise => write!(f, "Serial line is too noisy to read valid data"),
+            Self::FrameFormat => write!(
+                f,
+                "Received data does not conform to the peripheral configuration"
+            ),
+            Self::Closed => write!(f, "Device was closed"),
+            Self::Other => write!(
+                f,
+                "A different error occurred. The original error may contain more information"
+            ),
+        }
+    }
+}
+
+pub trait Registers: Clone + 'static {
+    fn can_put(&self) -> bool;
+    fn put(&self, c: u8) -> Result<(), ErrorKind>;
+    fn can_get(&self) -> bool;
+    fn get(&self) -> Result<u8, ErrorKind>;
+    fn set_irq_enable(&self, enable: bool);
+    fn get_irq_enable(&self) -> bool;
+    fn get_irq_event(&self) -> IrqEvent;
+    fn clean_irq_event(&self, event: IrqEvent);
+}
+
+pub struct Uart<R> {
+    registers: R,
+    tx: Arc<Taked>,
+    rx: Arc<Taked>,
+}
+
+impl<R: Registers> Uart<R> {
+    pub fn new(registers: R) -> Self {
+        Self {
+            registers: registers.clone(),
+            tx: Arc::new(Taked::new()),
+            rx: Arc::new(Taked::new()),
+        }
+    }
+
+    pub fn try_take_tx(&mut self) -> Option<Sender<R>> {
+        self.tx.try_take()?;
+
+        Some(Sender {
+            registers: self.registers.clone(),
+            taken: self.tx.clone(),
+        })
+    }
+
+    pub fn try_take_rx(&mut self) -> Option<Receiver<R>> {
+        self.rx.try_take()?;
+
+        Some(Receiver {
+            registers: self.registers.clone(),
+            taken: self.rx.clone(),
+        })
+    }
+}
+
+unsafe impl<R: Registers> Send for Uart<R> {}
+unsafe impl<R: Registers> Send for Sender<R> {}
+unsafe impl<R: Registers> Send for Receiver<R> {}
+
+struct Taked {
+    taken: AtomicBool,
+}
+
+impl Taked {
+    fn new() -> Self {
+        Self {
+            taken: AtomicBool::new(false),
+        }
+    }
+
+    fn try_take(&self) -> Option<()> {
+        match self
+            .taken
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+        {
+            Ok(taken) => {
+                if taken {
+                    None
+                } else {
+                    Some(())
+                }
+            }
+            Err(_) => None,
+        }
+    }
+}
+
+pub struct Sender<R: Registers> {
+    registers: R,
+    taken: Arc<Taked>,
+}
+
+impl<R: Registers> Sender<R> {
+    pub fn write(&mut self, buf: &[u8]) -> Result<usize, ErrorKind> {
+        let mut written = 0;
+        for &byte in buf {
+            if !self.registers.can_put() {
+                break;
+            }
+            self.registers.put(byte)?;
+            written += 1;
+        }
+        Ok(written)
+    }
+}
+
+impl<R: Registers> Drop for Sender<R> {
+    fn drop(&mut self) {
+        self.taken.taken.store(false, Ordering::Release);
+    }
+}
+
+pub struct Receiver<R: Registers> {
+    registers: R,
+    taken: Arc<Taked>,
+}
+
+impl<R: Registers> Receiver<R> {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, ErrorKind> {
+        let mut read = 0;
+        for byte in buf {
+            if !self.registers.can_get() {
+                break;
+            }
+            *byte = self.registers.get()?;
+            read += 1;
+        }
+        Ok(read)
+    }
+}
+
+impl<R: Registers> Drop for Receiver<R> {
+    fn drop(&mut self) {
+        self.taken.taken.store(false, Ordering::Release);
+    }
+}
