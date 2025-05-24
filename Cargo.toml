@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+futures = { version = "0.3", default-features = false }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }

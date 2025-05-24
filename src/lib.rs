@@ -3,7 +3,12 @@
 extern crate alloc;
 
 use alloc::sync::Arc;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::{
+    cell::UnsafeCell,
+    sync::atomic::{AtomicBool, Ordering},
+    task::Poll,
+};
+use futures::task::AtomicWaker;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct IrqEvent {
@@ -69,16 +74,16 @@ pub trait Registers: Clone + 'static {
 
 pub struct Uart<R> {
     registers: R,
-    tx: Arc<Taked>,
-    rx: Arc<Taked>,
+    tx: ChData,
+    rx: ChData,
 }
 
 impl<R: Registers> Uart<R> {
     pub fn new(registers: R) -> Self {
         Self {
             registers: registers.clone(),
-            tx: Arc::new(Taked::new()),
-            rx: Arc::new(Taked::new()),
+            tx: ChData::new(),
+            rx: ChData::new(),
         }
     }
 
@@ -87,7 +92,7 @@ impl<R: Registers> Uart<R> {
 
         Some(Sender {
             registers: self.registers.clone(),
-            taken: self.tx.clone(),
+            data: self.tx.clone(),
         })
     }
 
@@ -99,20 +104,59 @@ impl<R: Registers> Uart<R> {
             taken: self.rx.clone(),
         })
     }
+
+    /// Returns the irq state of this [`Uart`].
+    ///
+    /// # Safety
+    ///
+    /// Only used in interrupt handler.
+    pub unsafe fn get_irq_event(&self) -> IrqEvent {
+        self.registers.get_irq_event()
+    }
+
+    /// Cleans the irq state of this [`Uart`].
+    ///
+    /// # Safety
+    ///
+    /// Only used in interrupt handler.
+    pub unsafe fn clean_irq_event(&self, state: IrqEvent) {
+        self.registers.clean_irq_event(state);
+    }
+
+    /// Returns the handle irq of this [`Uart<R>`].
+    ///
+    /// # Safety
+    ///
+    /// Only used in interrupt handler.
+    pub unsafe fn handle_irq(&self) {
+        let state = self.registers.get_irq_event();
+
+        if state.rx {
+            self.rx.waker.wake();
+        }
+        if state.tx {
+            self.tx.waker.wake();
+        }
+
+        self.registers.clean_irq_event(state);
+    }
 }
 
 unsafe impl<R: Registers> Send for Uart<R> {}
 unsafe impl<R: Registers> Send for Sender<R> {}
 unsafe impl<R: Registers> Send for Receiver<R> {}
 
-struct Taked {
-    taken: AtomicBool,
+#[derive(Clone)]
+struct ChData {
+    taken: Arc<AtomicBool>,
+    waker: Arc<AtomicWaker>,
 }
 
-impl Taked {
+impl ChData {
     fn new() -> Self {
         Self {
-            taken: AtomicBool::new(false),
+            taken: Arc::new(AtomicBool::new(false)),
+            waker: Arc::new(AtomicWaker::new()),
         }
     }
 
@@ -135,7 +179,7 @@ impl Taked {
 
 pub struct Sender<R: Registers> {
     registers: R,
-    taken: Arc<Taked>,
+    data: ChData,
 }
 
 impl<R: Registers> Sender<R> {
@@ -150,17 +194,29 @@ impl<R: Registers> Sender<R> {
         }
         Ok(written)
     }
+
+    pub fn can_put(&self) -> bool {
+        self.registers.can_put()
+    }
+
+    pub fn write_all(&mut self, buf: &[u8]) -> Result<(), ErrorKind> {
+        self.write(buf)?;
+        while self.can_put() {
+            core::hint::spin_loop();
+        }
+        Ok(())
+    }
 }
 
 impl<R: Registers> Drop for Sender<R> {
     fn drop(&mut self) {
-        self.taken.taken.store(false, Ordering::Release);
+        self.data.taken.store(false, Ordering::Release);
     }
 }
 
 pub struct Receiver<R: Registers> {
     registers: R,
-    taken: Arc<Taked>,
+    taken: ChData,
 }
 
 impl<R: Registers> Receiver<R> {
@@ -180,5 +236,35 @@ impl<R: Registers> Receiver<R> {
 impl<R: Registers> Drop for Receiver<R> {
     fn drop(&mut self) {
         self.taken.taken.store(false, Ordering::Release);
+    }
+}
+
+struct WaitForWriteAll<'a, 'b, R: Registers> {
+    waiter: Arc<AtomicWaker>,
+    sender: &'a mut Sender<R>,
+    buf: &'b [u8],
+}
+
+impl<'a, 'b, R: Registers> Future for WaitForWriteAll<'a, 'b, R> {
+    type Output = Result<(), ErrorKind>;
+
+    fn poll(
+        mut self: core::pin::Pin<&mut Self>,
+        cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Self::Output> {
+        self.waiter.register(cx.waker());
+
+        let buf = self.buf;
+        match self.sender.write(buf) {
+            Ok(n) => {
+                self.buf = &buf[n..];
+                if n < buf.len() {
+                    Poll::Pending
+                } else {
+                    Poll::Ready(Ok(()))
+                }
+            }
+            Err(e) => Poll::Ready(Err(e)),
+        }
     }
 }
