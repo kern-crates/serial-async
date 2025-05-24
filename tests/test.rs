@@ -1,56 +1,82 @@
 use std::{
     collections::VecDeque,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex},
     thread::sleep,
     time::Duration,
 };
 
-use uart_async::{Registers, Uart};
+use uart_async::{IrqEvent, Registers, Uart};
 
 const FIFO_MAX: usize = 4;
 
 #[derive(Default)]
 struct FakeRegisters {
     tx_fifo: VecDeque<u8>,
-    rx_fifo: Vec<u8>,
+    is_tx_empty: bool,
+    is_rx_full: bool,
+    rx_fifo: VecDeque<u8>,
+    out_data: Vec<u8>,
+    in_data: VecDeque<u8>,
 }
 
-static OUT_DATA: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+type IrqFn = Arc<Mutex<Option<Box<dyn Fn() + Send + 'static>>>>;
 
 #[derive(Clone)]
 struct FakeUart {
+    irq_fn: IrqFn,
     registers: Arc<Mutex<FakeRegisters>>,
 }
 
 impl FakeUart {
-    fn new() -> Self {
-        let regs: Arc<Mutex<FakeRegisters>> = Default::default();
+    fn new(in_data: &[u8]) -> Self {
+        let irq_fn: IrqFn = Arc::new(Mutex::new(None));
+        let regs = Arc::new(Mutex::new(FakeRegisters {
+            in_data: VecDeque::from_iter(in_data.iter().cloned()),
+            ..Default::default()
+        }));
+
         std::thread::spawn({
+            let irq_fn = irq_fn.clone();
             let regs = regs.clone();
             move || {
-                let mut tick = 0;
                 loop {
                     sleep(Duration::from_millis(20));
-                    let mut is_irq = false;
                     let mut regs = regs.lock().unwrap();
                     if let Some(b) = regs.tx_fifo.pop_front() {
-                        OUT_DATA.lock().unwrap().push(b);
-                        println!("tx: {b}");
-                    }
-                    if regs.tx_fifo.is_empty() {
-                        is_irq = true;
+                        regs.out_data.push(b);
+                        println!("tx: {b}, fifo: {:?}", regs.tx_fifo.len());
+                        if regs.tx_fifo.is_empty() {
+                            regs.is_tx_empty = true;
+                        }
                     }
 
+                    if let Some(b) = regs.in_data.pop_front() {
+                        if regs.rx_fifo.len() == FIFO_MAX {
+                            panic!("rx fifo overflow");
+                        }
+                        regs.rx_fifo.push_back(b);
+                        if regs.rx_fifo.len() == FIFO_MAX {
+                            regs.is_rx_full = true;
+                        }
+                    }
+
+                    let is_irq = regs.is_tx_empty || regs.is_rx_full;
                     drop(regs);
                     if is_irq {
-                        irq_handle();
+                        let g = irq_fn.lock().unwrap();
+                        if let Some(irq_fn) = g.as_ref() {
+                            println!("IRQ!");
+                            irq_fn();
+                        }
                     }
-                    tick += 1;
                 }
             }
         });
 
-        Self { registers: regs }
+        Self {
+            registers: regs,
+            irq_fn,
+        }
     }
 }
 
@@ -62,26 +88,27 @@ impl Registers for FakeUart {
 
     fn put(&self, c: u8) -> Result<(), uart_async::ErrorKind> {
         let mut regs = self.registers.lock().unwrap();
-        regs.tx_fifo.push_back(c);
         if regs.tx_fifo.len() == FIFO_MAX {
-            // TODO: trigger irq
-        }
-        if regs.tx_fifo.len() > FIFO_MAX {
             panic!("tx fifo overflow");
         }
+        regs.tx_fifo.push_back(c);
 
         Ok(())
     }
 
     fn can_get(&self) -> bool {
-        todo!()
+        let regs = self.registers.lock().unwrap();
+        !regs.rx_fifo.is_empty()
     }
 
     fn get(&self) -> Result<u8, uart_async::ErrorKind> {
-        todo!()
+        let mut regs = self.registers.lock().unwrap();
+        regs.rx_fifo
+            .pop_front()
+            .ok_or(uart_async::ErrorKind::Overrun)
     }
 
-    fn set_irq_enable(&self, enable: bool) {
+    fn set_irq_enable(&self, _enable: bool) {
         todo!()
     }
 
@@ -90,25 +117,29 @@ impl Registers for FakeUart {
     }
 
     fn get_irq_event(&self) -> uart_async::IrqEvent {
-        todo!()
+        let regs = self.registers.lock().unwrap();
+
+        IrqEvent {
+            can_get: regs.is_rx_full,
+            can_put: regs.is_tx_empty,
+        }
     }
 
     fn clean_irq_event(&self, event: uart_async::IrqEvent) {
-        todo!()
-    }
-}
-
-static UART: OnceLock<Uart<FakeUart>> = OnceLock::new();
-
-fn irq_handle() {
-    unsafe {
-        UART.get().unwrap().handle_irq();
+        println!("clean_irq_event");
+        let mut regs = self.registers.lock().unwrap();
+        if event.can_put {
+            regs.is_tx_empty = false;
+        }
+        if event.can_get {
+            regs.is_rx_full = false;
+        }
     }
 }
 
 #[test]
 fn test_take() {
-    let mut uart = Uart::new(FakeUart::new());
+    let mut uart = Uart::new(FakeUart::new(&[]));
     let tx = uart.try_take_tx().unwrap();
     let e = uart.try_take_tx();
     assert!(e.is_none());
@@ -119,7 +150,12 @@ fn test_take() {
 
 #[test]
 fn test_tx() {
-    let mut uart = Uart::new(FakeUart::new());
+    let fake = FakeUart::new(&[]);
+
+    let fake_data = fake.registers.clone();
+
+    let mut uart = Uart::new(fake);
+
     let mut tx = uart.try_take_tx().unwrap();
 
     let data = (0..12).collect::<Vec<u8>>();
@@ -134,5 +170,68 @@ fn test_tx() {
         buf = &buf[n..];
     }
     sleep(Duration::from_millis(100));
-    assert_eq!(OUT_DATA.lock().unwrap().as_slice(), &data);
+    assert_eq!(fake_data.lock().unwrap().out_data.as_slice(), &data);
+}
+
+#[tokio::test]
+async fn test_tx_async() {
+    let fake = FakeUart::new(&[]);
+    let irq_fn = fake.irq_fn.clone();
+    let fake_data = fake.registers.clone();
+
+    let mut uart = Uart::new(fake);
+    let handler = uart.irq_handler.take().unwrap();
+    {
+        let mut g = irq_fn.lock().unwrap();
+        g.replace(Box::new(move || unsafe {
+            handler.handle_irq();
+        }));
+    }
+
+    let mut tx = uart.try_take_tx().unwrap();
+
+    let data = (0..12).collect::<Vec<u8>>();
+
+    tokio::spawn(async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    });
+
+    tx.write_all(&data).await.unwrap();
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    assert_eq!(fake_data.lock().unwrap().out_data.as_slice(), &data);
+}
+
+#[tokio::test]
+async fn test_rx_async() {
+    let in_data = (0..12).collect::<Vec<u8>>();
+
+    let fake = FakeUart::new(&in_data);
+    let irq_fn = fake.irq_fn.clone();
+
+    let mut uart = Uart::new(fake);
+    let handler = uart.irq_handler.take().unwrap();
+    {
+        let mut g = irq_fn.lock().unwrap();
+        g.replace(Box::new(move || unsafe {
+            handler.handle_irq();
+        }));
+    }
+
+    let mut rx = uart.try_take_rx().unwrap();
+
+    let mut data = vec![0u8; in_data.len()];
+
+    tokio::spawn(async {
+        loop {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    });
+
+    rx.read_all(&mut data).await.unwrap();
+
+    assert_eq!(&in_data, &data);
 }
