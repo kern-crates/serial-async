@@ -5,7 +5,7 @@ A lightweight and flexible UART driver library that provides register-level acce
 ## 📌 Features
 
 - **Register-Level Abstraction**: Offers low-level register-like control while maintaining usability.
-- **Asynchronous Read/Write Support**: Enables non-blocking data transmission and reception using interrupts or DMA.
+- **Asynchronous Read/Write Support**: Enables non-blocking data transmission and reception using interrupts and uart FIFO.
 - **Highly Portable**: Abstracted hardware layer allows easy adaptation to different MCUs or SoCs.
 - **Modular Design**: Clean architecture suitable for integration into existing embedded projects.
 - **Full-Duplex Communication**: Supports simultaneous sending and receiving, automatically controlling the lifecycle of the transmitter and receiver.
@@ -20,8 +20,6 @@ pub trait Registers: Clone + 'static {
     fn put(&self, c: u8) -> Result<(), ErrorKind>;
     fn can_get(&self) -> bool;
     fn get(&self) -> Result<u8, ErrorKind>;
-    fn set_irq_enable(&self, enable: bool);
-    fn get_irq_enable(&self) -> bool;
     fn get_irq_event(&self) -> IrqEvent;
     fn clean_irq_event(&self, event: IrqEvent);
 }

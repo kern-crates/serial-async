@@ -65,8 +65,6 @@ pub trait Registers: Clone + 'static {
     fn put(&self, c: u8) -> Result<(), ErrorKind>;
     fn can_get(&self) -> bool;
     fn get(&self) -> Result<u8, ErrorKind>;
-    fn set_irq_enable(&self, enable: bool);
-    fn get_irq_enable(&self) -> bool;
     fn get_irq_event(&self) -> IrqEvent;
     fn clean_irq_event(&self, event: IrqEvent);
 }

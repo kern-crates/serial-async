@@ -108,14 +108,6 @@ impl Registers for FakeUart {
             .ok_or(uart_async::ErrorKind::Overrun)
     }
 
-    fn set_irq_enable(&self, _enable: bool) {
-        todo!()
-    }
-
-    fn get_irq_enable(&self) -> bool {
-        todo!()
-    }
-
     fn get_irq_event(&self) -> uart_async::IrqEvent {
         let regs = self.registers.lock().unwrap();
 
