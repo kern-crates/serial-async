@@ -1,6 +1,6 @@
 [package]
 name = "uart-async"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["周睿 <zrufo747@outlook.com>"]
 description = "A library that makes creating asynchronous serial drivers even simpler."

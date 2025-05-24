@@ -23,6 +23,7 @@ pub trait Registers: Clone + 'static {
     fn get_irq_event(&self) -> IrqEvent;
     fn clean_irq_event(&self, event: IrqEvent);
 }
+```
 
 Then you can use it like this:
 
