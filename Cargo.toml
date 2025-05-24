@@ -2,6 +2,12 @@
 name = "uart-async"
 version = "0.1.0"
 edition = "2024"
+authors = ["周睿 <zrufo747@outlook.com>"]
+description = "A library that makes creating asynchronous serial drivers even simpler."
+keywords = ["no-std", "serial", "uart", "async"]
+license = "MIT"
+categories = ["no-std", "embedded", "hardware-support", "asynchronous"]
+repository = "https://github.com/rcore-os/uart-async"
 
 [dependencies]
 futures = { version = "0.3", default-features = false }
