@@ -225,11 +225,13 @@ async fn test_rx_async() {
 
     let mut data = vec![0u8; in_data.len()];
 
-    tokio::spawn(async {
-        loop {
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        }
-    });
+    for _ in 0..1000 {
+        tokio::spawn(async {
+            loop {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        });
+    }
 
     rx.read_all(&mut data).await.unwrap();
 
