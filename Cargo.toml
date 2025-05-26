@@ -1,6 +1,6 @@
 [package]
 name = "serial-async"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["周睿 <zrufo747@outlook.com>"]
 description = "A library that makes creating asynchronous serial drivers even simpler."
@@ -11,6 +11,7 @@ repository = "https://github.com/rcore-os/serial-async"
 
 [dependencies]
 futures = { version = "0.3", default-features = false }
+rdif-serial = "0.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

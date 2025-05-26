@@ -2,12 +2,14 @@
 
 extern crate alloc;
 
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc};
 use core::{
     sync::atomic::{AtomicBool, Ordering},
     task::Poll,
 };
-use futures::task::AtomicWaker;
+use futures::{FutureExt, task::AtomicWaker};
+use rdif_serial::ErrorBase;
+pub use rdif_serial::{DriverGeneric, Interface, SerialError};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct IrqEvent {
@@ -15,56 +17,11 @@ pub struct IrqEvent {
     pub can_put: bool,
 }
 
-/// Serial error kind.
-///
-/// This represents a common set of serial operation errors. HAL implementations are
-/// free to define more specific or additional error types. However, by providing
-/// a mapping to these common serial errors, generic code can still react to them.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-#[non_exhaustive]
-pub enum ErrorKind {
-    /// The peripheral receive buffer was overrun.
-    Overrun,
-    /// Received data does not conform to the peripheral configuration.
-    /// Can be caused by a misconfigured device on either end of the serial line.
-    FrameFormat,
-    /// Parity check failed.
-    Parity,
-    /// Serial line is too noisy to read valid data.
-    Noise,
-    /// Device was closed.
-    Closed,
-    /// A different error occurred. The original error may contain more information.
-    Other,
-}
-
-impl core::error::Error for ErrorKind {}
-
-impl core::fmt::Display for ErrorKind {
-    #[inline]
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Overrun => write!(f, "The peripheral receive buffer was overrun"),
-            Self::Parity => write!(f, "Parity check failed"),
-            Self::Noise => write!(f, "Serial line is too noisy to read valid data"),
-            Self::FrameFormat => write!(
-                f,
-                "Received data does not conform to the peripheral configuration"
-            ),
-            Self::Closed => write!(f, "Device was closed"),
-            Self::Other => write!(
-                f,
-                "A different error occurred. The original error may contain more information"
-            ),
-        }
-    }
-}
-
 pub trait Registers: Clone + 'static {
     fn can_put(&self) -> bool;
-    fn put(&self, c: u8) -> Result<(), ErrorKind>;
+    fn put(&self, c: u8) -> Result<(), SerialError>;
     fn can_get(&self) -> bool;
-    fn get(&self) -> Result<u8, ErrorKind>;
+    fn get(&self) -> Result<u8, SerialError>;
     fn get_irq_event(&self) -> IrqEvent;
     fn clean_irq_event(&self, event: IrqEvent);
 }
@@ -123,6 +80,56 @@ impl<R: Registers> Serial<R> {
     /// Only used in interrupt handler.
     pub unsafe fn clean_irq_event(&self, state: IrqEvent) {
         self.registers.clean_irq_event(state);
+    }
+}
+
+impl<R: Registers> DriverGeneric for Serial<R> {
+    fn open(&mut self) -> Result<(), ErrorBase> {
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ErrorBase> {
+        Ok(())
+    }
+}
+
+impl<R: Registers> Interface for Serial<R> {
+    fn handle_irq(&mut self) {
+        unsafe { self.irq_handler.as_mut().unwrap().handle_irq() };
+    }
+
+    fn take_tx(&mut self) -> Option<Box<dyn rdif_serial::Sender>> {
+        Some(Box::new(self.try_take_tx()?))
+    }
+
+    fn take_rx(&mut self) -> Option<Box<dyn rdif_serial::Reciever>> {
+        Some(Box::new(self.try_take_rx()?))
+    }
+}
+
+impl<R: Registers> rdif_serial::Sender for Sender<R> {
+    fn write(&mut self, buf: &[u8]) -> Result<usize, SerialError> {
+        Sender::write(self, buf)
+    }
+
+    fn write_all<'a>(
+        &'a mut self,
+        buf: &'a [u8],
+    ) -> rdif_serial::LocalBoxFuture<'a, Result<(), SerialError>> {
+        Sender::write_all(self, buf).boxed_local()
+    }
+}
+
+impl<R: Registers> rdif_serial::Reciever for Receiver<R> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, SerialError> {
+        Receiver::read(self, buf)
+    }
+
+    fn read_all<'a>(
+        &'a mut self,
+        buf: &'a mut [u8],
+    ) -> rdif_serial::LocalBoxFuture<'a, Result<(), SerialError>> {
+        Receiver::read_all(self, buf).boxed_local()
     }
 }
 
@@ -194,7 +201,7 @@ pub struct Sender<R: Registers> {
 }
 
 impl<R: Registers> Sender<R> {
-    pub fn write(&mut self, buf: &[u8]) -> Result<usize, ErrorKind> {
+    pub fn write(&mut self, buf: &[u8]) -> Result<usize, SerialError> {
         let mut written = 0;
         for &byte in buf {
             if !self.registers.can_put() {
@@ -210,7 +217,10 @@ impl<R: Registers> Sender<R> {
         self.registers.can_put()
     }
 
-    pub fn write_all(&mut self, buf: &[u8]) -> impl Future<Output = Result<(), ErrorKind>> {
+    pub fn write_all<'a>(
+        &'a mut self,
+        buf: &'a [u8],
+    ) -> impl Future<Output = Result<(), SerialError>> + 'a {
         WaitForWriteAll {
             waiter: self.data.waker.clone(),
             sender: self,
@@ -231,7 +241,7 @@ pub struct Receiver<R: Registers> {
 }
 
 impl<R: Registers> Receiver<R> {
-    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, ErrorKind> {
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<usize, SerialError> {
         let mut read = 0;
         for byte in buf {
             if !self.registers.can_get() {
@@ -243,7 +253,10 @@ impl<R: Registers> Receiver<R> {
         Ok(read)
     }
 
-    pub fn read_all(&mut self, buf: &mut [u8]) -> impl Future<Output = Result<(), ErrorKind>> {
+    pub fn read_all<'a>(
+        &'a mut self,
+        buf: &'a mut [u8],
+    ) -> impl Future<Output = Result<(), SerialError>> + 'a {
         WaitForReadAll {
             waiter: self.data.waker.clone(),
             rx: self,
@@ -259,14 +272,14 @@ impl<R: Registers> Drop for Receiver<R> {
     }
 }
 
-struct WaitForWriteAll<'a, 'b, R: Registers> {
+struct WaitForWriteAll<'a, R: Registers> {
     waiter: Arc<AtomicWaker>,
     sender: &'a mut Sender<R>,
-    buf: &'b [u8],
+    buf: &'a [u8],
 }
 
-impl<'a, 'b, R: Registers> Future for WaitForWriteAll<'a, 'b, R> {
-    type Output = Result<(), ErrorKind>;
+impl<R: Registers> Future for WaitForWriteAll<'_, R> {
+    type Output = Result<(), SerialError>;
 
     fn poll(
         mut self: core::pin::Pin<&mut Self>,
@@ -289,15 +302,15 @@ impl<'a, 'b, R: Registers> Future for WaitForWriteAll<'a, 'b, R> {
     }
 }
 
-struct WaitForReadAll<'a, 'b, R: Registers> {
+struct WaitForReadAll<'a, R: Registers> {
     waiter: Arc<AtomicWaker>,
     rx: &'a mut Receiver<R>,
-    buf: &'b mut [u8],
+    buf: &'a mut [u8],
     i: usize,
 }
 
-impl<'a, 'b, R: Registers> Future for WaitForReadAll<'a, 'b, R> {
-    type Output = Result<(), ErrorKind>;
+impl<R: Registers> Future for WaitForReadAll<'_, R> {
+    type Output = Result<(), SerialError>;
 
     fn poll(
         mut self: core::pin::Pin<&mut Self>,

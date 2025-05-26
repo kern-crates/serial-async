@@ -86,7 +86,7 @@ impl Registers for FakeUart {
         regs.tx_fifo.len() < FIFO_MAX
     }
 
-    fn put(&self, c: u8) -> Result<(), ErrorKind> {
+    fn put(&self, c: u8) -> Result<(), SerialError> {
         let mut regs = self.registers.lock().unwrap();
         if regs.tx_fifo.len() == FIFO_MAX {
             panic!("tx fifo overflow");
@@ -101,9 +101,9 @@ impl Registers for FakeUart {
         !regs.rx_fifo.is_empty()
     }
 
-    fn get(&self) -> Result<u8, ErrorKind> {
+    fn get(&self) -> Result<u8, SerialError> {
         let mut regs = self.registers.lock().unwrap();
-        regs.rx_fifo.pop_front().ok_or(ErrorKind::Overrun)
+        regs.rx_fifo.pop_front().ok_or(SerialError::Overrun)
     }
 
     fn get_irq_event(&self) -> IrqEvent {
