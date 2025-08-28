@@ -5,6 +5,8 @@ extern crate alloc;
 pub mod ns16550;
 pub mod pl011;
 
+pub use serial_async::*;
+
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 struct Mmio(usize);
