@@ -73,6 +73,20 @@ impl Default for UartConfig {
     }
 }
 
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum ConfigError {
+    #[error("Invalid parameter `{name}`=`{value}`: {msg}")]
+    InvalidParameter {
+        name: &'static str,
+        value: usize,
+        msg: &'static str,
+    },
+    #[error("Not supported")]
+    NotSupported,
+    #[error("{0}")]
+    Other(&'static str),
+}
+
 pub trait Registers: Send + Clone + 'static {
     fn can_put(&self) -> bool;
     fn put(&self, c: u8) -> Result<(), SerialError>;
@@ -93,7 +107,7 @@ pub trait Registers: Send + Clone + 'static {
     fn loopback_disable(&self) {}
 
     /// 配置UART参数
-    fn configure(&self, config: &UartConfig) -> Result<(), SerialError> {
+    fn configure(&self, config: &UartConfig) -> Result<(), ConfigError> {
         self.set_baud_rate(config.baud_rate)?;
         self.set_data_bits(config.data_bits)?;
         self.set_stop_bits(config.stop_bits)?;
@@ -103,28 +117,32 @@ pub trait Registers: Send + Clone + 'static {
     }
 
     /// 设置波特率
-    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), SerialError>;
+    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), ConfigError>;
 
     /// 设置数据位数
-    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError>;
+    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), ConfigError>;
 
     /// 设置停止位数
-    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError>;
+    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), ConfigError>;
 
     /// 设置奇偶校验
-    fn set_parity(&self, parity: Parity) -> Result<(), SerialError>;
+    fn set_parity(&self, parity: Parity) -> Result<(), ConfigError>;
 
     /// 设置流控制
-    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError>;
+    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), ConfigError>;
 
     /// 启用DMA接收
-    fn dma_rx_enable(&self) {}
+    fn dma_rx_enable(&self) -> Result<(), ConfigError> {
+        Err(ConfigError::NotSupported)
+    }
 
     /// 禁用DMA接收
     fn dma_rx_disable(&self) {}
 
     /// 启用DMA发送
-    fn dma_tx_enable(&self) {}
+    fn dma_tx_enable(&self) -> Result<(), ConfigError> {
+        Err(ConfigError::NotSupported)
+    }
 
     /// 禁用DMA发送
     fn dma_tx_disable(&self) {}
@@ -136,17 +154,6 @@ pub trait Registers: Send + Clone + 'static {
 
     /// 检查DMA发送是否启用
     fn dma_tx_enabled(&self) -> bool {
-        false
-    }
-
-    /// 启用错误时禁用DMA
-    fn dma_on_error_enable(&self) {}
-
-    /// 禁用错误时禁用DMA
-    fn dma_on_error_disable(&self) {}
-
-    /// 检查错误时禁用DMA是否启用
-    fn dma_on_error_enabled(&self) -> bool {
         false
     }
 }
@@ -244,38 +251,38 @@ impl<R: Registers> Serial<R> {
     }
 
     /// 配置UART参数
-    pub fn configure(&self, config: &UartConfig) -> Result<(), SerialError> {
+    pub fn configure(&self, config: &UartConfig) -> Result<(), ConfigError> {
         self.registers.configure(config)
     }
 
     /// 设置波特率
-    pub fn set_baud_rate(&self, baud_rate: usize) -> Result<(), SerialError> {
+    pub fn set_baud_rate(&self, baud_rate: usize) -> Result<(), ConfigError> {
         self.registers.set_baud_rate(baud_rate)
     }
 
     /// 设置数据位数
-    pub fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError> {
+    pub fn set_data_bits(&self, data_bits: DataBits) -> Result<(), ConfigError> {
         self.registers.set_data_bits(data_bits)
     }
 
     /// 设置停止位数
-    pub fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError> {
+    pub fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), ConfigError> {
         self.registers.set_stop_bits(stop_bits)
     }
 
     /// 设置奇偶校验
-    pub fn set_parity(&self, parity: Parity) -> Result<(), SerialError> {
+    pub fn set_parity(&self, parity: Parity) -> Result<(), ConfigError> {
         self.registers.set_parity(parity)
     }
 
     /// 设置流控制
-    pub fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError> {
+    pub fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), ConfigError> {
         self.registers.set_flow_control(flow_control)
     }
 
     /// 启用DMA接收
-    pub fn dma_rx_enable(&self) {
-        self.registers.dma_rx_enable();
+    pub fn dma_rx_enable(&mut self) -> Result<(), ConfigError> {
+        self.registers.dma_rx_enable()
     }
 
     /// 禁用DMA接收
@@ -284,8 +291,8 @@ impl<R: Registers> Serial<R> {
     }
 
     /// 启用DMA发送
-    pub fn dma_tx_enable(&self) {
-        self.registers.dma_tx_enable();
+    pub fn dma_tx_enable(&self) -> Result<(), ConfigError> {
+        self.registers.dma_tx_enable()
     }
 
     /// 禁用DMA发送
@@ -301,21 +308,6 @@ impl<R: Registers> Serial<R> {
     /// 检查DMA发送是否启用
     pub fn dma_tx_enabled(&self) -> bool {
         self.registers.dma_tx_enabled()
-    }
-
-    /// 启用错误时禁用DMA
-    pub fn dma_on_error_enable(&self) {
-        self.registers.dma_on_error_enable();
-    }
-
-    /// 禁用错误时禁用DMA
-    pub fn dma_on_error_disable(&self) {
-        self.registers.dma_on_error_disable();
-    }
-
-    /// 检查错误时禁用DMA是否启用
-    pub fn dma_on_error_enabled(&self) -> bool {
-        self.registers.dma_on_error_enabled()
     }
 }
 

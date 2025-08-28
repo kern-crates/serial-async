@@ -333,7 +333,7 @@ impl Registers for Impl {
         self.registers.uartcr.modify(UARTCR::LBE::CLEAR);
     }
 
-    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), SerialError> {
+    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), ConfigError> {
         // PL011 的波特率计算公式：
         // BAUDDIV = (FUARTCLK / (16 * Baud rate))
         // IBRD = integer(BAUDDIV)
@@ -348,7 +348,11 @@ impl Registers for Impl {
         let fbrd = ((uart_clk % (16 * baud)) * 64 + (16 * baud / 2)) / (16 * baud);
 
         if bauddiv == 0 || bauddiv > 0xFFFF {
-            return Err(SerialError::Other);
+            return Err(ConfigError::InvalidParameter {
+                name: "baud_rate",
+                value: baud_rate,
+                msg: "Calculated integer baud rate divisor out of range (1-65535)",
+            });
         }
 
         self.registers
@@ -361,7 +365,7 @@ impl Registers for Impl {
         Ok(())
     }
 
-    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError> {
+    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), ConfigError> {
         let wlen = match data_bits {
             DataBits::Five => UARTLCR_H::WLEN::FiveBit,
             DataBits::Six => UARTLCR_H::WLEN::SixBit,
@@ -373,7 +377,7 @@ impl Registers for Impl {
         Ok(())
     }
 
-    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError> {
+    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), ConfigError> {
         match stop_bits {
             StopBits::One => self.registers.uartlcr_h.modify(UARTLCR_H::STP2::CLEAR),
             StopBits::Two => self.registers.uartlcr_h.modify(UARTLCR_H::STP2::SET),
@@ -381,7 +385,7 @@ impl Registers for Impl {
         Ok(())
     }
 
-    fn set_parity(&self, parity: Parity) -> Result<(), SerialError> {
+    fn set_parity(&self, parity: Parity) -> Result<(), ConfigError> {
         match parity {
             Parity::None => {
                 // PEN = 0, 无奇偶校验
@@ -416,7 +420,7 @@ impl Registers for Impl {
         Ok(())
     }
 
-    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError> {
+    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), ConfigError> {
         match flow_control {
             FlowControl::None => {
                 // 禁用流控制
@@ -432,16 +436,17 @@ impl Registers for Impl {
             }
             FlowControl::XonXoff => {
                 // PL011不直接支持XON/XOFF，需要在软件层实现
-                return Err(SerialError::Other);
+                return Err(ConfigError::NotSupported);
             }
         }
 
         Ok(())
     }
 
-    fn dma_rx_enable(&self) {
+    fn dma_rx_enable(&self) -> Result<(), ConfigError> {
         // 启用接收DMA：设置RXDMAE位
         self.registers.uartdmacr.modify(UARTDMACR::RXDMAE::SET);
+        Ok(())
     }
 
     fn dma_rx_disable(&self) {
@@ -449,9 +454,10 @@ impl Registers for Impl {
         self.registers.uartdmacr.modify(UARTDMACR::RXDMAE::CLEAR);
     }
 
-    fn dma_tx_enable(&self) {
+    fn dma_tx_enable(&self) -> Result<(), ConfigError> {
         // 启用发送DMA：设置TXDMAE位
         self.registers.uartdmacr.modify(UARTDMACR::TXDMAE::SET);
+        Ok(())
     }
 
     fn dma_tx_disable(&self) {
@@ -470,22 +476,6 @@ impl Registers for Impl {
         use tock_registers::interfaces::Readable;
         self.registers.uartdmacr.is_set(UARTDMACR::TXDMAE)
     }
-
-    fn dma_on_error_enable(&self) {
-        // 启用错误时禁用DMA：设置DMAONERR位
-        self.registers.uartdmacr.modify(UARTDMACR::DMAONERR::SET);
-    }
-
-    fn dma_on_error_disable(&self) {
-        // 禁用错误时禁用DMA：清除DMAONERR位
-        self.registers.uartdmacr.modify(UARTDMACR::DMAONERR::CLEAR);
-    }
-
-    fn dma_on_error_enabled(&self) -> bool {
-        // 检查DMAONERR位是否设置
-        use tock_registers::interfaces::Readable;
-        self.registers.uartdmacr.is_set(UARTDMACR::DMAONERR)
-    }
 }
 
 impl Impl {
@@ -501,7 +491,7 @@ impl Impl {
     }
 
     /// 完整配置UART（会暂时禁用UART）
-    pub fn configure_uart(&self, config: &UartConfig) -> Result<(), SerialError> {
+    pub fn configure_uart(&self, config: &UartConfig) -> Result<(), ConfigError> {
         use tock_registers::interfaces::Readable;
 
         // 根据ARM文档的建议配置流程：

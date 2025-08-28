@@ -131,63 +131,23 @@ impl Registers for Impl {
         todo!()
     }
 
-    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), SerialError> {
+    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), ConfigError> {
         todo!()
     }
 
-    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError> {
+    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), ConfigError> {
         todo!()
     }
 
-    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError> {
+    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), ConfigError> {
         todo!()
     }
 
-    fn set_parity(&self, parity: Parity) -> Result<(), SerialError> {
+    fn set_parity(&self, parity: Parity) -> Result<(), ConfigError> {
         todo!()
     }
 
-    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError> {
+    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), ConfigError> {
         todo!()
-    }
-
-    fn dma_rx_enable(&self) {
-        // NS16550 通常不支持DMA，这里提供空实现
-        // 在实际使用中，如果硬件支持DMA，需要在这里实现相应的寄存器操作
-    }
-
-    fn dma_rx_disable(&self) {
-        // NS16550 通常不支持DMA，这里提供空实现
-    }
-
-    fn dma_tx_enable(&self) {
-        // NS16550 通常不支持DMA，这里提供空实现
-    }
-
-    fn dma_tx_disable(&self) {
-        // NS16550 通常不支持DMA，这里提供空实现
-    }
-
-    fn dma_rx_enabled(&self) -> bool {
-        // NS16550 通常不支持DMA，返回false
-        false
-    }
-
-    fn dma_tx_enabled(&self) -> bool {
-        // NS16550 通常不支持DMA，返回false
-        false
-    }
-
-    fn dma_on_error_enable(&self) {
-        // NS16550 通常不支持DMA，这里提供空实现
-    }
-
-    fn dma_on_error_disable(&self) {
-        // NS16550 通常不支持DMA，这里提供空实现
-    }
-
-    fn dma_on_error_enabled(&self) -> bool {
-        // NS16550 通常不支持DMA，返回false
-        false
     }
 }

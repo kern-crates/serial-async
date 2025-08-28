@@ -1,17 +1,18 @@
 [package]
-name = "serial-async"
-version = "0.3.0"
-edition = "2024"
 authors = ["周睿 <zrufo747@outlook.com>"]
+categories = ["no-std", "embedded", "hardware-support", "asynchronous"]
 description = "A library that makes creating asynchronous serial drivers even simpler."
+edition = "2024"
 keywords = ["no-std", "serial", "uart", "async"]
 license = "MIT"
-categories = ["no-std", "embedded", "hardware-support", "asynchronous"]
+name = "serial-async"
 repository = "https://github.com/rcore-os/serial-async"
+version = "0.3.0"
 
 [dependencies]
-futures = { version = "0.3", default-features = false }
+futures = {version = "0.3", default-features = false}
 rdif-serial = "0.1"
+thiserror = {version = "2", default-features = false}
 
 [target.'cfg(not(target_os = "none"))'.dev-dependencies]
-tokio = { version = "1", features = ["full"] }
+tokio = {version = "1", features = ["full"]}
