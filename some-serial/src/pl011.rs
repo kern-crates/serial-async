@@ -1,6 +1,6 @@
 use serial_async::*;
 
-use crate::Mmio;
+use tock_registers::{interfaces::*, register_bitfields, register_structs, registers::*};
 
 bitflags::bitflags! {
     struct Interrupts: u32 {
@@ -29,65 +29,227 @@ bitflags::bitflags! {
     }
 }
 
-const RIS: usize = 0x03C / 4;
-const MIS: usize = 0x040 / 4;
-const ICR: usize = 0x044 / 4;
-const CR: usize = 0x030 / 4;
-const UARTDR: usize = 0x000 / 4;
-const UARTECR: usize = 0x004 / 4;
-const UARTFR: usize = 0x018 / 4;
-const UARTIBRD: usize = 0x024 / 4; // Integer Baud Rate Register
-const UARTFBRD: usize = 0x028 / 4; // Fractional Baud Rate Register
-const UARTLCR_H: usize = 0x02C / 4; // Line Control Register
+register_bitfields! [
+    u32,
+
+    /// Data Register
+    UARTDR [
+        DATA OFFSET(0) NUMBITS(8) [],
+        FE OFFSET(8) NUMBITS(1) [],
+        PE OFFSET(9) NUMBITS(1) [],
+        BE OFFSET(10) NUMBITS(1) [],
+        OE OFFSET(11) NUMBITS(1) []
+    ],
+
+    /// Receive Status Register / Error Clear Register
+    UARTRSR_ECR [
+        FE OFFSET(0) NUMBITS(1) [],
+        PE OFFSET(1) NUMBITS(1) [],
+        BE OFFSET(2) NUMBITS(1) [],
+        OE OFFSET(3) NUMBITS(1) []
+    ],
+
+    /// Flag Register
+    UARTFR [
+        CTS OFFSET(0) NUMBITS(1) [],
+        DSR OFFSET(1) NUMBITS(1) [],
+        DCD OFFSET(2) NUMBITS(1) [],
+        BUSY OFFSET(3) NUMBITS(1) [],
+        RXFE OFFSET(4) NUMBITS(1) [],
+        TXFF OFFSET(5) NUMBITS(1) [],
+        RXFF OFFSET(6) NUMBITS(1) [],
+        TXFE OFFSET(7) NUMBITS(1) [],
+        RI OFFSET(8) NUMBITS(1) []
+    ],
+
+    /// Integer Baud Rate Register
+    UARTIBRD [
+        BAUD_DIVINT OFFSET(0) NUMBITS(16) []
+    ],
+
+    /// Fractional Baud Rate Register
+    UARTFBRD [
+        BAUD_DIVFRAC OFFSET(0) NUMBITS(6) []
+    ],
+
+    /// Line Control Register
+    UARTLCR_H [
+        BRK OFFSET(0) NUMBITS(1) [],
+        PEN OFFSET(1) NUMBITS(1) [],
+        EPS OFFSET(2) NUMBITS(1) [],
+        STP2 OFFSET(3) NUMBITS(1) [],
+        FEN OFFSET(4) NUMBITS(1) [],
+        WLEN OFFSET(5) NUMBITS(2) [
+            FiveBit = 0,
+            SixBit = 1,
+            SevenBit = 2,
+            EightBit = 3
+        ],
+        SPS OFFSET(7) NUMBITS(1) []
+    ],
+
+    /// Control Register
+    UARTCR [
+        UARTEN OFFSET(0) NUMBITS(1) [],
+        SIREN OFFSET(1) NUMBITS(1) [],
+        SIRLP OFFSET(2) NUMBITS(1) [],
+        LBE OFFSET(7) NUMBITS(1) [],
+        TXE OFFSET(8) NUMBITS(1) [],
+        RXE OFFSET(9) NUMBITS(1) [],
+        DTR OFFSET(10) NUMBITS(1) [],
+        RTS OFFSET(11) NUMBITS(1) [],
+        OUT1 OFFSET(12) NUMBITS(1) [],
+        OUT2 OFFSET(13) NUMBITS(1) [],
+        RTSEN OFFSET(14) NUMBITS(1) [],
+        CTSEN OFFSET(15) NUMBITS(1) []
+    ],
+
+    /// Interrupt FIFO Level Select Register
+    UARTIFLS [
+        TXIFLSEL OFFSET(0) NUMBITS(3) [],
+        RXIFLSEL OFFSET(3) NUMBITS(3) []
+    ],
+
+    /// Interrupt Mask Set/Clear Register
+    UARTIMSC [
+        RIMIM OFFSET(0) NUMBITS(1) [],
+        CTSMIM OFFSET(1) NUMBITS(1) [],
+        DCDMIM OFFSET(2) NUMBITS(1) [],
+        DSRMIM OFFSET(3) NUMBITS(1) [],
+        RXIM OFFSET(4) NUMBITS(1) [],
+        TXIM OFFSET(5) NUMBITS(1) [],
+        RTIM OFFSET(6) NUMBITS(1) [],
+        FEIM OFFSET(7) NUMBITS(1) [],
+        PEIM OFFSET(8) NUMBITS(1) [],
+        BEIM OFFSET(9) NUMBITS(1) [],
+        OEIM OFFSET(10) NUMBITS(1) []
+    ],
+
+    /// Raw Interrupt Status Register
+    UARTRIS [
+        RIRMIS OFFSET(0) NUMBITS(1) [],
+        CTSRMIS OFFSET(1) NUMBITS(1) [],
+        DCDRMIS OFFSET(2) NUMBITS(1) [],
+        DSRRMIS OFFSET(3) NUMBITS(1) [],
+        RXRIS OFFSET(4) NUMBITS(1) [],
+        TXRIS OFFSET(5) NUMBITS(1) [],
+        RTRIS OFFSET(6) NUMBITS(1) [],
+        FERIS OFFSET(7) NUMBITS(1) [],
+        PERIS OFFSET(8) NUMBITS(1) [],
+        BERIS OFFSET(9) NUMBITS(1) [],
+        OERIS OFFSET(10) NUMBITS(1) []
+    ],
+
+    /// Masked Interrupt Status Register
+    UARTMIS [
+        RIMMIS OFFSET(0) NUMBITS(1) [],
+        CTSMIS OFFSET(1) NUMBITS(1) [],
+        DCDMIS OFFSET(2) NUMBITS(1) [],
+        DSRMIS OFFSET(3) NUMBITS(1) [],
+        RXMIS OFFSET(4) NUMBITS(1) [],
+        TXMIS OFFSET(5) NUMBITS(1) [],
+        RTMIS OFFSET(6) NUMBITS(1) [],
+        FEMIS OFFSET(7) NUMBITS(1) [],
+        PEMIS OFFSET(8) NUMBITS(1) [],
+        BEMIS OFFSET(9) NUMBITS(1) [],
+        OEMIS OFFSET(10) NUMBITS(1) []
+    ],
+
+    /// Interrupt Clear Register
+    UARTICR [
+        RIMIC OFFSET(0) NUMBITS(1) [],
+        CTSMIC OFFSET(1) NUMBITS(1) [],
+        DCDMIC OFFSET(2) NUMBITS(1) [],
+        DSRMIC OFFSET(3) NUMBITS(1) [],
+        RXIC OFFSET(4) NUMBITS(1) [],
+        TXIC OFFSET(5) NUMBITS(1) [],
+        RTIC OFFSET(6) NUMBITS(1) [],
+        FEIC OFFSET(7) NUMBITS(1) [],
+        PEIC OFFSET(8) NUMBITS(1) [],
+        BEIC OFFSET(9) NUMBITS(1) [],
+        OEIC OFFSET(10) NUMBITS(1) []
+    ]
+];
+
+register_structs! {
+    pub Pl011Registers {
+        (0x000 => uartdr: ReadWrite<u32, UARTDR::Register>),
+        (0x004 => uartrsr_ecr: ReadWrite<u32, UARTRSR_ECR::Register>),
+        (0x008 => _reserved1),
+        (0x018 => uartfr: ReadOnly<u32, UARTFR::Register>),
+        (0x01c => _reserved2),
+        (0x020 => uartilpr: ReadWrite<u32>),
+        (0x024 => uartibrd: ReadWrite<u32, UARTIBRD::Register>),
+        (0x028 => uartfbrd: ReadWrite<u32, UARTFBRD::Register>),
+        (0x02c => uartlcr_h: ReadWrite<u32, UARTLCR_H::Register>),
+        (0x030 => uartcr: ReadWrite<u32, UARTCR::Register>),
+        (0x034 => uartifls: ReadWrite<u32, UARTIFLS::Register>),
+        (0x038 => uartimsc: ReadWrite<u32, UARTIMSC::Register>),
+        (0x03c => uartris: ReadOnly<u32, UARTRIS::Register>),
+        (0x040 => uartmis: ReadOnly<u32, UARTMIS::Register>),
+        (0x044 => uarticr: WriteOnly<u32, UARTICR::Register>),
+        (0x048 => uartdmacr: ReadWrite<u32>),
+        (0x04c => _reserved3),
+        (0x1000 => @END),
+    }
+}
+
+// SAFETY: PL011 寄存器访问是原子的，硬件保证了内存映射寄存器的线程安全
+unsafe impl Sync for Pl011Registers {}
 
 pub type Pl011 = Serial<Impl>;
 
 pub fn new(mmio: usize, clk_freq: usize) -> Pl011 {
     Pl011::new(Impl {
         clk_freq,
-        mmio: Mmio(mmio),
+        registers: unsafe { &*(mmio as *const Pl011Registers) },
     })
 }
 
 #[derive(Clone)]
 pub struct Impl {
     clk_freq: usize,
-    mmio: Mmio,
+    registers: &'static Pl011Registers,
 }
+
+// SAFETY: PL011 寄存器访问是原子的，可以安全地在线程间共享
+unsafe impl Sync for Impl {}
 
 impl Registers for Impl {
     fn can_put(&self) -> bool {
-        const TXFF: u32 = 1 << 5;
-        self.mmio.read::<u32>(UARTFR) & TXFF == 0
+        use tock_registers::interfaces::Readable;
+        !self.registers.uartfr.is_set(UARTFR::TXFF)
     }
 
     fn put(&self, c: u8) -> Result<(), SerialError> {
-        self.mmio.write(UARTDR, c as u32);
+        use tock_registers::interfaces::Writeable;
+        self.registers.uartdr.write(UARTDR::DATA.val(c as u32));
         Ok(())
     }
 
     fn can_get(&self) -> bool {
-        const RXFE: u32 = 0x10;
-        self.mmio.read::<u32>(UARTFR) & RXFE == 0
+        use tock_registers::interfaces::Readable;
+        !self.registers.uartfr.is_set(UARTFR::RXFE)
     }
 
     fn get(&self) -> Result<u8, SerialError> {
-        let data: u32 = self.mmio.read(UARTDR);
+        use tock_registers::interfaces::{Readable, Writeable};
+        let data = self.registers.uartdr.get();
 
         if data & 0xFFFFFF00 != 0 {
             // Clear the error
-            self.mmio.write(UARTECR, 0xFFFFFFFFu32);
+            self.registers.uartrsr_ecr.set(0xFFFFFFFF);
             return Err(SerialError::Other);
         }
 
-        Ok(data as _)
+        Ok(data as u8)
     }
 
     fn get_irq_event(&self) -> IrqEvent {
         let mut event = IrqEvent::default();
 
-        let ris: u32 = self.mmio.read(RIS);
-        let mis: u32 = self.mmio.read(MIS);
+        let ris = self.registers.uartris.get();
+        let mis = self.registers.uartmis.get();
 
         let sts = Interrupts::from_bits_retain(ris & mis);
 
@@ -111,63 +273,55 @@ impl Registers for Impl {
             irqs |= Interrupts::TXI
         }
 
-        self.mmio.write(ICR, irqs.bits());
+        self.registers.uarticr.set(irqs.bits());
     }
 
     fn enable(&self) {
         // 设置UARTEN位来启用UART
-        let mut cr: u32 = self.mmio.read(CR);
-        cr |= 1 << 0; // 设置UARTEN位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::UARTEN::SET);
     }
 
     fn disable(&self) {
         // 清除UARTEN位来禁用UART
-        let mut cr: u32 = self.mmio.read(CR);
-        cr &= !(1 << 0); // 清除UARTEN位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::UARTEN::CLEAR);
     }
 
     fn tx_enable(&self) {
         // 设置TXE位来启用发送
-        let mut cr: u32 = self.mmio.read(CR);
-        cr |= 1 << 8; // 设置TXE位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::TXE::SET);
     }
 
     fn tx_disable(&self) {
         // 清除TXE位来禁用发送
-        let mut cr: u32 = self.mmio.read(CR);
-        cr &= !(1 << 8); // 清除TXE位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::TXE::CLEAR);
     }
 
     fn rx_enable(&self) {
         // 设置RXE位来启用接收
-        let mut cr: u32 = self.mmio.read(CR);
-        cr |= 1 << 9; // 设置RXE位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::RXE::SET);
     }
 
     fn rx_disable(&self) {
         // 清除RXE位来禁用接收
-        let mut cr: u32 = self.mmio.read(CR);
-        cr &= !(1 << 9); // 清除RXE位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::RXE::CLEAR);
     }
 
     fn loopback_enable(&self) {
         // 设置LBE位来启用环回模式
-        let mut cr: u32 = self.mmio.read(CR);
-        cr |= 1 << 7; // 设置LBE位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::LBE::SET);
     }
 
     fn loopback_disable(&self) {
         // 清除LBE位来禁用环回模式
-        let mut cr: u32 = self.mmio.read(CR);
-        cr &= !(1 << 7); // 清除LBE位
-        self.mmio.write(CR, cr);
+
+        self.registers.uartcr.modify(UARTCR::LBE::CLEAR);
     }
 
     fn set_baud_rate(&self, baud_rate: BaudRate) -> Result<(), SerialError> {
@@ -188,86 +342,84 @@ impl Registers for Impl {
             return Err(SerialError::Other);
         }
 
-        self.mmio.write(UARTIBRD, bauddiv);
-        self.mmio.write(UARTFBRD, fbrd);
+        self.registers
+            .uartibrd
+            .write(UARTIBRD::BAUD_DIVINT.val(bauddiv));
+        self.registers
+            .uartfbrd
+            .write(UARTFBRD::BAUD_DIVFRAC.val(fbrd));
 
         Ok(())
     }
 
     fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError> {
-        let mut lcr_h: u32 = self.mmio.read(UARTLCR_H);
-        lcr_h &= !(0b11 << 5); // 清除WLEN位 [6:5]
-
         let wlen = match data_bits {
-            DataBits::Five => 0b00,
-            DataBits::Six => 0b01,
-            DataBits::Seven => 0b10,
-            DataBits::Eight => 0b11,
+            DataBits::Five => UARTLCR_H::WLEN::FiveBit,
+            DataBits::Six => UARTLCR_H::WLEN::SixBit,
+            DataBits::Seven => UARTLCR_H::WLEN::SevenBit,
+            DataBits::Eight => UARTLCR_H::WLEN::EightBit,
         };
 
-        lcr_h |= wlen << 5;
-        self.mmio.write(UARTLCR_H, lcr_h);
-
+        self.registers.uartlcr_h.modify(wlen);
         Ok(())
     }
 
     fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError> {
-        let mut lcr_h: u32 = self.mmio.read(UARTLCR_H);
-
         match stop_bits {
-            StopBits::One => lcr_h &= !(1 << 3), // 清除STP2位
-            StopBits::Two => lcr_h |= 1 << 3,    // 设置STP2位
+            StopBits::One => self.registers.uartlcr_h.modify(UARTLCR_H::STP2::CLEAR),
+            StopBits::Two => self.registers.uartlcr_h.modify(UARTLCR_H::STP2::SET),
         }
-
-        self.mmio.write(UARTLCR_H, lcr_h);
-
         Ok(())
     }
 
     fn set_parity(&self, parity: Parity) -> Result<(), SerialError> {
-        let mut lcr_h: u32 = self.mmio.read(UARTLCR_H);
-        lcr_h &= !(0b111 << 1); // 清除PEN, EPS, SPS位 [3:1]
-
         match parity {
             Parity::None => {
                 // PEN = 0, 无奇偶校验
+                self.registers.uartlcr_h.modify(UARTLCR_H::PEN::CLEAR);
             }
             Parity::Odd => {
-                lcr_h |= 1 << 1; // PEN = 1
-                // EPS = 0 (奇校验)
+                // PEN = 1, EPS = 0 (奇校验), SPS = 0
+                self.registers
+                    .uartlcr_h
+                    .modify(UARTLCR_H::PEN::SET + UARTLCR_H::EPS::CLEAR + UARTLCR_H::SPS::CLEAR);
             }
             Parity::Even => {
-                lcr_h |= 1 << 1; // PEN = 1
-                lcr_h |= 1 << 2; // EPS = 1 (偶校验)
+                // PEN = 1, EPS = 1 (偶校验), SPS = 0
+                self.registers
+                    .uartlcr_h
+                    .modify(UARTLCR_H::PEN::SET + UARTLCR_H::EPS::SET + UARTLCR_H::SPS::CLEAR);
             }
             Parity::Mark => {
-                lcr_h |= 1 << 1; // PEN = 1
-                lcr_h |= 1 << 3; // SPS = 1
-                // EPS = 0 (奇校验)
+                // PEN = 1, SPS = 1, EPS = 0 (奇校验)
+                self.registers
+                    .uartlcr_h
+                    .modify(UARTLCR_H::PEN::SET + UARTLCR_H::EPS::CLEAR + UARTLCR_H::SPS::SET);
             }
             Parity::Space => {
-                lcr_h |= 1 << 1; // PEN = 1
-                lcr_h |= 1 << 2; // EPS = 1 (偶校验)
-                lcr_h |= 1 << 3; // SPS = 1
+                // PEN = 1, EPS = 1 (偶校验), SPS = 1
+                self.registers
+                    .uartlcr_h
+                    .modify(UARTLCR_H::PEN::SET + UARTLCR_H::EPS::SET + UARTLCR_H::SPS::SET);
             }
         }
-
-        self.mmio.write(UARTLCR_H, lcr_h);
 
         Ok(())
     }
 
     fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError> {
-        let mut cr: u32 = self.mmio.read(CR);
-        cr &= !(0b11 << 14); // 清除CTSEn和RTSEn位 [15:14]
-
         match flow_control {
             FlowControl::None => {
-                // 无流控制，位已清除
+                // 禁用流控制
+                self.registers
+                    .uartcr
+                    .modify(UARTCR::RTSEN::CLEAR + UARTCR::CTSEN::CLEAR);
             }
             FlowControl::RtsCts => {
-                cr |= 1 << 14; // RTSEn = 1
-                cr |= 1 << 15; // CTSEn = 1
+                // 启用RTS/CTS流控制
+                self.registers
+                    .uartcr
+                    .modify(UARTCR::RTSEN::SET + UARTCR::CTSEN::SET);
             }
             FlowControl::XonXoff => {
                 // PL011不直接支持XON/XOFF，需要在软件层实现
@@ -275,36 +427,33 @@ impl Registers for Impl {
             }
         }
 
-        self.mmio.write(CR, cr);
-
         Ok(())
     }
 }
 
 impl Impl {
     pub fn read_control_register(&self) -> u32 {
-        self.mmio.read(CR)
+        use tock_registers::interfaces::Readable;
+        self.registers.uartcr.get()
     }
 
     /// 完整配置UART（会暂时禁用UART）
     pub fn configure_uart(&self, config: &UartConfig) -> Result<(), SerialError> {
+        use tock_registers::interfaces::Readable;
+
         // 根据ARM文档的建议配置流程：
         // 1. 禁用UART
-        let mut cr: u32 = self.mmio.read(CR);
-        let original_enable = cr & 1; // 保存原始使能状态
-        cr &= !1; // 禁用UART
-        self.mmio.write(CR, cr);
+        let original_enable = self.registers.uartcr.is_set(UARTCR::UARTEN); // 保存原始使能状态
+        self.registers.uartcr.modify(UARTCR::UARTEN::CLEAR); // 禁用UART
 
         // 2. 等待当前字符传输完成
-        while self.mmio.read::<u32>(UARTFR) & (1 << 3) != 0 {
+        while self.registers.uartfr.is_set(UARTFR::BUSY) {
             // BUSY位
             core::hint::spin_loop();
         }
 
         // 3. 刷新发送FIFO（通过设置FEN=0）
-        let mut lcr_h: u32 = self.mmio.read(UARTLCR_H);
-        lcr_h &= !(1 << 4); // FEN = 0
-        self.mmio.write(UARTLCR_H, lcr_h);
+        self.registers.uartlcr_h.modify(UARTLCR_H::FEN::CLEAR);
 
         // 4. 配置各项参数
         self.set_baud_rate(config.baud_rate)?;
@@ -313,18 +462,14 @@ impl Impl {
         self.set_parity(config.parity)?;
 
         // 5. 重新启用FIFO
-        lcr_h = self.mmio.read(UARTLCR_H);
-        lcr_h |= 1 << 4; // FEN = 1
-        self.mmio.write(UARTLCR_H, lcr_h);
+        self.registers.uartlcr_h.modify(UARTLCR_H::FEN::SET);
 
         // 6. 配置流控制
         self.set_flow_control(config.flow_control)?;
 
         // 7. 恢复UART使能状态
-        if original_enable != 0 {
-            cr = self.mmio.read(CR);
-            cr |= 1; // 重新启用UART
-            self.mmio.write(CR, cr);
+        if original_enable {
+            self.registers.uartcr.modify(UARTCR::UARTEN::SET); // 重新启用UART
         }
 
         Ok(())
