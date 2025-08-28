@@ -17,13 +17,24 @@ pub struct IrqEvent {
     pub can_put: bool,
 }
 
-pub trait Registers: Clone + 'static {
+pub trait Registers: Send + Clone + 'static {
     fn can_put(&self) -> bool;
     fn put(&self, c: u8) -> Result<(), SerialError>;
     fn can_get(&self) -> bool;
     fn get(&self) -> Result<u8, SerialError>;
     fn get_irq_event(&self) -> IrqEvent;
     fn clean_irq_event(&self, event: IrqEvent);
+
+    fn enable(&self);
+    fn disable(&self);
+
+    fn tx_enable(&self);
+    fn tx_disable(&self);
+    fn rx_enable(&self);
+    fn rx_disable(&self);
+
+    fn loopback_enable(&self) {}
+    fn loopback_disable(&self) {}
 }
 
 pub struct Serial<R: Registers> {
@@ -48,6 +59,7 @@ impl<R: Registers> Serial<R> {
 
     pub fn try_take_tx(&mut self) -> Option<Sender<R>> {
         self.tx.try_take()?;
+        self.registers.tx_enable();
 
         Some(Sender {
             registers: self.registers.clone(),
@@ -57,6 +69,7 @@ impl<R: Registers> Serial<R> {
 
     pub fn try_take_rx(&mut self) -> Option<Receiver<R>> {
         self.rx.try_take()?;
+        self.registers.rx_enable();
 
         Some(Receiver {
             registers: self.registers.clone(),
@@ -81,14 +94,24 @@ impl<R: Registers> Serial<R> {
     pub unsafe fn clean_irq_event(&self, state: IrqEvent) {
         self.registers.clean_irq_event(state);
     }
+
+    pub fn loopback_enable(&self) {
+        self.registers.loopback_enable();
+    }
+
+    pub fn loopback_disable(&self) {
+        self.registers.loopback_disable();
+    }
 }
 
 impl<R: Registers> DriverGeneric for Serial<R> {
     fn open(&mut self) -> Result<(), ErrorBase> {
+        self.registers.enable();
         Ok(())
     }
 
     fn close(&mut self) -> Result<(), ErrorBase> {
+        self.registers.disable();
         Ok(())
     }
 }
@@ -231,6 +254,7 @@ impl<R: Registers> Sender<R> {
 
 impl<R: Registers> Drop for Sender<R> {
     fn drop(&mut self) {
+        self.registers.tx_disable();
         self.data.taken.store(false, Ordering::Release);
     }
 }
@@ -268,6 +292,7 @@ impl<R: Registers> Receiver<R> {
 
 impl<R: Registers> Drop for Receiver<R> {
     fn drop(&mut self) {
+        self.registers.rx_disable();
         self.data.taken.store(false, Ordering::Release);
     }
 }

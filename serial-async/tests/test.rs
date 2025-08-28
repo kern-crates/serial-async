@@ -125,6 +125,18 @@ impl Registers for FakeUart {
             regs.is_rx_full = false;
         }
     }
+
+    fn enable(&self) {}
+
+    fn disable(&self) {}
+
+    fn tx_enable(&self) {}
+
+    fn tx_disable(&self) {}
+
+    fn rx_enable(&self) {}
+
+    fn rx_disable(&self) {}
 }
 
 #[test]

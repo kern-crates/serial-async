@@ -1,0 +1,7 @@
+[package]
+edition = "2024"
+name = "some-serial"
+version = "0.1.0"
+
+[dependencies]
+serial-async = {path = "../serial-async", version = "0.3"}
