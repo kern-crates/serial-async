@@ -13,5 +13,5 @@ repository = "https://github.com/rcore-os/serial-async"
 futures = { version = "0.3", default-features = false }
 rdif-serial = "0.1"
 
-[dev-dependencies]
+[target.'cfg(not(target_os = "none"))'.dev-dependencies]
 tokio = { version = "1", features = ["full"] }

@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(target_os = "none", no_std)]
 
 extern crate alloc;
 
@@ -102,16 +102,24 @@ impl<R: Registers> Serial<R> {
     pub fn loopback_disable(&self) {
         self.registers.loopback_disable();
     }
+
+    pub fn enable(&self) {
+        self.registers.enable();
+    }
+
+    pub fn disable(&self) {
+        self.registers.disable();
+    }
 }
 
 impl<R: Registers> DriverGeneric for Serial<R> {
     fn open(&mut self) -> Result<(), ErrorBase> {
-        self.registers.enable();
+        self.enable();
         Ok(())
     }
 
     fn close(&mut self) -> Result<(), ErrorBase> {
-        self.registers.disable();
+        self.disable();
         Ok(())
     }
 }
@@ -249,6 +257,15 @@ impl<R: Registers> Sender<R> {
             sender: self,
             buf,
         }
+    }
+
+    pub fn write_all_blocking(&mut self, buf: &[u8]) -> Result<(), SerialError> {
+        let mut written = 0;
+        while written < buf.len() {
+            let n = self.write(&buf[written..])?;
+            written += n;
+        }
+        Ok(())
     }
 }
 

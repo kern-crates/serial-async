@@ -1,3 +1,5 @@
+#![cfg(not(target_os = "none"))]
+
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex},
