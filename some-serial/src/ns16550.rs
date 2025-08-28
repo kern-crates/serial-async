@@ -129,4 +129,24 @@ impl Registers for Impl {
     fn rx_disable(&self) {
         todo!()
     }
+    
+    fn set_baud_rate(&self, baud_rate: BaudRate) -> Result<(), SerialError> {
+        todo!()
+    }
+    
+    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError> {
+        todo!()
+    }
+    
+    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError> {
+        todo!()
+    }
+    
+    fn set_parity(&self, parity: Parity) -> Result<(), SerialError> {
+        todo!()
+    }
+    
+    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError> {
+        todo!()
+    }
 }

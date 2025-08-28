@@ -2089,6 +2089,7 @@ dependencies = [
  "bitflags 2.9.3",
  "log",
  "serial-async",
+ "tock-registers 0.10.0",
  "x86_64",
 ]
 

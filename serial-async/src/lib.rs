@@ -17,6 +17,92 @@ pub struct IrqEvent {
     pub can_put: bool,
 }
 
+/// UART波特率
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BaudRate {
+    Baud9600,
+    Baud19200,
+    Baud38400,
+    Baud57600,
+    Baud115200,
+    Baud230400,
+    Baud460800,
+    Baud921600,
+    Custom(u32),
+}
+
+impl BaudRate {
+    pub fn as_u32(&self) -> u32 {
+        match self {
+            BaudRate::Baud9600 => 9600,
+            BaudRate::Baud19200 => 19200,
+            BaudRate::Baud38400 => 38400,
+            BaudRate::Baud57600 => 57600,
+            BaudRate::Baud115200 => 115200,
+            BaudRate::Baud230400 => 230400,
+            BaudRate::Baud460800 => 460800,
+            BaudRate::Baud921600 => 921600,
+            BaudRate::Custom(rate) => *rate,
+        }
+    }
+}
+
+/// 数据位数
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DataBits {
+    Five,
+    Six,
+    Seven,
+    Eight,
+}
+
+/// 停止位数
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopBits {
+    One,
+    Two,
+}
+
+/// 奇偶校验
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Parity {
+    None,
+    Odd,
+    Even,
+    Mark,
+    Space,
+}
+
+/// 流控制
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlowControl {
+    None,
+    RtsCts,
+    XonXoff,
+}
+
+/// UART配置
+#[derive(Debug, Clone, Copy)]
+pub struct UartConfig {
+    pub baud_rate: BaudRate,
+    pub data_bits: DataBits,
+    pub stop_bits: StopBits,
+    pub parity: Parity,
+    pub flow_control: FlowControl,
+}
+
+impl Default for UartConfig {
+    fn default() -> Self {
+        Self {
+            baud_rate: BaudRate::Baud115200,
+            data_bits: DataBits::Eight,
+            stop_bits: StopBits::One,
+            parity: Parity::None,
+            flow_control: FlowControl::None,
+        }
+    }
+}
+
 pub trait Registers: Send + Clone + 'static {
     fn can_put(&self) -> bool;
     fn put(&self, c: u8) -> Result<(), SerialError>;
@@ -35,6 +121,31 @@ pub trait Registers: Send + Clone + 'static {
 
     fn loopback_enable(&self) {}
     fn loopback_disable(&self) {}
+
+    /// 配置UART参数
+    fn configure(&self, config: &UartConfig) -> Result<(), SerialError> {
+        self.set_baud_rate(config.baud_rate)?;
+        self.set_data_bits(config.data_bits)?;
+        self.set_stop_bits(config.stop_bits)?;
+        self.set_parity(config.parity)?;
+        self.set_flow_control(config.flow_control)?;
+        Ok(())
+    }
+
+    /// 设置波特率
+    fn set_baud_rate(&self, baud_rate: BaudRate) -> Result<(), SerialError>;
+
+    /// 设置数据位数
+    fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError>;
+
+    /// 设置停止位数
+    fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError>;
+
+    /// 设置奇偶校验
+    fn set_parity(&self, parity: Parity) -> Result<(), SerialError>;
+
+    /// 设置流控制
+    fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError>;
 }
 
 pub struct Serial<R: Registers> {
@@ -109,6 +220,54 @@ impl<R: Registers> Serial<R> {
 
     pub fn disable(&self) {
         self.registers.disable();
+    }
+
+    /// 用于调试的方法：尝试清空接收FIFO
+    pub fn flush_rx(&self) -> usize {
+        let mut count = 0;
+        while self.registers.can_get() && count < 100 {
+            if self.registers.get().is_ok() {
+                count += 1;
+            } else {
+                break;
+            }
+        }
+        count
+    }
+
+    /// 用于调试的方法：获取原始寄存器访问
+    pub fn registers(&self) -> &R {
+        &self.registers
+    }
+
+    /// 配置UART参数
+    pub fn configure(&self, config: &UartConfig) -> Result<(), SerialError> {
+        self.registers.configure(config)
+    }
+
+    /// 设置波特率
+    pub fn set_baud_rate(&self, baud_rate: BaudRate) -> Result<(), SerialError> {
+        self.registers.set_baud_rate(baud_rate)
+    }
+
+    /// 设置数据位数
+    pub fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError> {
+        self.registers.set_data_bits(data_bits)
+    }
+
+    /// 设置停止位数
+    pub fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), SerialError> {
+        self.registers.set_stop_bits(stop_bits)
+    }
+
+    /// 设置奇偶校验
+    pub fn set_parity(&self, parity: Parity) -> Result<(), SerialError> {
+        self.registers.set_parity(parity)
+    }
+
+    /// 设置流控制
+    pub fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError> {
+        self.registers.set_flow_control(flow_control)
     }
 }
 
@@ -292,6 +451,14 @@ impl<R: Registers> Receiver<R> {
             read += 1;
         }
         Ok(read)
+    }
+
+    pub fn can_get(&self) -> bool {
+        self.registers.can_get()
+    }
+
+    pub fn get(&mut self) -> Result<u8, SerialError> {
+        self.registers.get()
     }
 
     pub fn read_all<'a>(

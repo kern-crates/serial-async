@@ -1,0 +1,6 @@
+serial = "/dev/ttyUSB0"
+baud_rate = 115200
+dtb_file = "/home/zhourui/Documents/phytium/phytium.dtb"
+
+[net]
+interface = "enp3s0"

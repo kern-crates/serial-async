@@ -6,6 +6,7 @@ version = "0.1.0"
 [dependencies]
 serial-async = {path = "../serial-async", version = "0.3"}
 bitflags = "2.8"
+tock-registers = "0.10"
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 x86_64 = "0.15"
