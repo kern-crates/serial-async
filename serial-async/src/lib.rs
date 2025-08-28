@@ -232,51 +232,38 @@ impl<R: Registers> Serial<R> {
         self.registers.disable();
     }
 
-    /// 用于调试的方法：尝试清空接收FIFO
-    pub fn flush_rx(&self) -> usize {
-        let mut count = 0;
-        while self.registers.can_get() && count < 100 {
-            if self.registers.get().is_ok() {
-                count += 1;
-            } else {
-                break;
-            }
-        }
-        count
-    }
-
     /// 用于调试的方法：获取原始寄存器访问
     pub fn registers(&self) -> &R {
         &self.registers
     }
 
     /// 配置UART参数
-    pub fn configure(&self, config: &UartConfig) -> Result<(), ConfigError> {
+    pub fn configure(&mut self, config: &UartConfig) -> Result<(), ConfigError> {
         self.registers.configure(config)
     }
 
     /// 设置波特率
-    pub fn set_baud_rate(&self, baud_rate: usize) -> Result<(), ConfigError> {
+    pub fn set_baud_rate(&mut self, baud_rate: usize) -> Result<(), ConfigError> {
         self.registers.set_baud_rate(baud_rate)
     }
 
     /// 设置数据位数
-    pub fn set_data_bits(&self, data_bits: DataBits) -> Result<(), ConfigError> {
+    pub fn set_data_bits(&mut self, data_bits: DataBits) -> Result<(), ConfigError> {
         self.registers.set_data_bits(data_bits)
     }
 
     /// 设置停止位数
-    pub fn set_stop_bits(&self, stop_bits: StopBits) -> Result<(), ConfigError> {
+    pub fn set_stop_bits(&mut self, stop_bits: StopBits) -> Result<(), ConfigError> {
         self.registers.set_stop_bits(stop_bits)
     }
 
     /// 设置奇偶校验
-    pub fn set_parity(&self, parity: Parity) -> Result<(), ConfigError> {
+    pub fn set_parity(&mut self, parity: Parity) -> Result<(), ConfigError> {
         self.registers.set_parity(parity)
     }
 
     /// 设置流控制
-    pub fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), ConfigError> {
+    pub fn set_flow_control(&mut self, flow_control: FlowControl) -> Result<(), ConfigError> {
         self.registers.set_flow_control(flow_control)
     }
 
@@ -286,17 +273,17 @@ impl<R: Registers> Serial<R> {
     }
 
     /// 禁用DMA接收
-    pub fn dma_rx_disable(&self) {
+    pub fn dma_rx_disable(&mut self) {
         self.registers.dma_rx_disable();
     }
 
     /// 启用DMA发送
-    pub fn dma_tx_enable(&self) -> Result<(), ConfigError> {
+    pub fn dma_tx_enable(&mut self) -> Result<(), ConfigError> {
         self.registers.dma_tx_enable()
     }
 
     /// 禁用DMA发送
-    pub fn dma_tx_disable(&self) {
+    pub fn dma_tx_disable(&mut self) {
         self.registers.dma_tx_disable();
     }
 
@@ -497,10 +484,6 @@ impl<R: Registers> Receiver<R> {
         self.registers.can_get()
     }
 
-    pub fn get(&mut self) -> Result<u8, SerialError> {
-        self.registers.get()
-    }
-
     pub fn read_all<'a>(
         &'a mut self,
         buf: &'a mut [u8],
@@ -511,6 +494,15 @@ impl<R: Registers> Receiver<R> {
             buf,
             i: 0,
         }
+    }
+
+    pub fn read_all_blocking(&mut self, buf: &mut [u8]) -> Result<(), SerialError> {
+        let mut read = 0;
+        while read < buf.len() {
+            let n = self.read(&mut buf[read..])?;
+            read += n;
+        }
+        Ok(())
     }
 }
 

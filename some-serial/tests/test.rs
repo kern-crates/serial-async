@@ -42,12 +42,6 @@ mod tests {
         .unwrap();
         uart.enable();
 
-        // 清空任何残留的数据
-        let flushed = uart.flush_rx();
-        if flushed > 0 {
-            info!("Flushed {} bytes from RX buffer", flushed);
-        }
-
         uart.loopback_enable();
 
         // 检查控制寄存器的值
@@ -74,11 +68,7 @@ mod tests {
         // 逐字节发送并立即尝试接收
         let mut received_data = [0u8; 17];
         for (i, &byte_to_send) in test_data.iter().enumerate() {
-            // 发送一个字节
-            while !sender.can_put() {
-                core::hint::spin_loop();
-            }
-            sender.write(&[byte_to_send]).unwrap();
+            sender.write_all_blocking(&[byte_to_send]).unwrap();
             info!(
                 "Sent byte {}: {} ('{}')",
                 i, byte_to_send, byte_to_send as char
@@ -86,15 +76,17 @@ mod tests {
 
             // 等待并接收这个字节
             let mut wait_count = 0;
-            while !receiver.can_get() {
-                core::hint::spin_loop();
+
+            let mut buff = [0u8; 1];
+
+            while receiver.read(&mut buff).unwrap() == 0 {
                 wait_count += 1;
                 if wait_count > 100000 {
                     panic!("Timeout waiting for byte {}", i);
                 }
             }
 
-            received_data[i] = receiver.get().unwrap();
+            received_data[i] = buff[0];
             info!(
                 "Received byte {}: {} ('{}')",
                 i, received_data[i], received_data[i] as char
