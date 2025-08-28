@@ -17,36 +17,6 @@ pub struct IrqEvent {
     pub can_put: bool,
 }
 
-/// UART波特率
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BaudRate {
-    Baud9600,
-    Baud19200,
-    Baud38400,
-    Baud57600,
-    Baud115200,
-    Baud230400,
-    Baud460800,
-    Baud921600,
-    Custom(u32),
-}
-
-impl BaudRate {
-    pub fn as_u32(&self) -> u32 {
-        match self {
-            BaudRate::Baud9600 => 9600,
-            BaudRate::Baud19200 => 19200,
-            BaudRate::Baud38400 => 38400,
-            BaudRate::Baud57600 => 57600,
-            BaudRate::Baud115200 => 115200,
-            BaudRate::Baud230400 => 230400,
-            BaudRate::Baud460800 => 460800,
-            BaudRate::Baud921600 => 921600,
-            BaudRate::Custom(rate) => *rate,
-        }
-    }
-}
-
 /// 数据位数
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataBits {
@@ -84,7 +54,7 @@ pub enum FlowControl {
 /// UART配置
 #[derive(Debug, Clone, Copy)]
 pub struct UartConfig {
-    pub baud_rate: BaudRate,
+    pub baud_rate: usize,
     pub data_bits: DataBits,
     pub stop_bits: StopBits,
     pub parity: Parity,
@@ -94,7 +64,7 @@ pub struct UartConfig {
 impl Default for UartConfig {
     fn default() -> Self {
         Self {
-            baud_rate: BaudRate::Baud115200,
+            baud_rate: 115200,
             data_bits: DataBits::Eight,
             stop_bits: StopBits::One,
             parity: Parity::None,
@@ -133,7 +103,7 @@ pub trait Registers: Send + Clone + 'static {
     }
 
     /// 设置波特率
-    fn set_baud_rate(&self, baud_rate: BaudRate) -> Result<(), SerialError>;
+    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), SerialError>;
 
     /// 设置数据位数
     fn set_data_bits(&self, data_bits: DataBits) -> Result<(), SerialError>;
@@ -146,6 +116,39 @@ pub trait Registers: Send + Clone + 'static {
 
     /// 设置流控制
     fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError>;
+
+    /// 启用DMA接收
+    fn dma_rx_enable(&self) {}
+
+    /// 禁用DMA接收
+    fn dma_rx_disable(&self) {}
+
+    /// 启用DMA发送
+    fn dma_tx_enable(&self) {}
+
+    /// 禁用DMA发送
+    fn dma_tx_disable(&self) {}
+
+    /// 检查DMA接收是否启用
+    fn dma_rx_enabled(&self) -> bool {
+        false
+    }
+
+    /// 检查DMA发送是否启用
+    fn dma_tx_enabled(&self) -> bool {
+        false
+    }
+
+    /// 启用错误时禁用DMA
+    fn dma_on_error_enable(&self) {}
+
+    /// 禁用错误时禁用DMA
+    fn dma_on_error_disable(&self) {}
+
+    /// 检查错误时禁用DMA是否启用
+    fn dma_on_error_enabled(&self) -> bool {
+        false
+    }
 }
 
 pub struct Serial<R: Registers> {
@@ -246,7 +249,7 @@ impl<R: Registers> Serial<R> {
     }
 
     /// 设置波特率
-    pub fn set_baud_rate(&self, baud_rate: BaudRate) -> Result<(), SerialError> {
+    pub fn set_baud_rate(&self, baud_rate: usize) -> Result<(), SerialError> {
         self.registers.set_baud_rate(baud_rate)
     }
 
@@ -268,6 +271,51 @@ impl<R: Registers> Serial<R> {
     /// 设置流控制
     pub fn set_flow_control(&self, flow_control: FlowControl) -> Result<(), SerialError> {
         self.registers.set_flow_control(flow_control)
+    }
+
+    /// 启用DMA接收
+    pub fn dma_rx_enable(&self) {
+        self.registers.dma_rx_enable();
+    }
+
+    /// 禁用DMA接收
+    pub fn dma_rx_disable(&self) {
+        self.registers.dma_rx_disable();
+    }
+
+    /// 启用DMA发送
+    pub fn dma_tx_enable(&self) {
+        self.registers.dma_tx_enable();
+    }
+
+    /// 禁用DMA发送
+    pub fn dma_tx_disable(&self) {
+        self.registers.dma_tx_disable();
+    }
+
+    /// 检查DMA接收是否启用
+    pub fn dma_rx_enabled(&self) -> bool {
+        self.registers.dma_rx_enabled()
+    }
+
+    /// 检查DMA发送是否启用
+    pub fn dma_tx_enabled(&self) -> bool {
+        self.registers.dma_tx_enabled()
+    }
+
+    /// 启用错误时禁用DMA
+    pub fn dma_on_error_enable(&self) {
+        self.registers.dma_on_error_enable();
+    }
+
+    /// 禁用错误时禁用DMA
+    pub fn dma_on_error_disable(&self) {
+        self.registers.dma_on_error_disable();
+    }
+
+    /// 检查错误时禁用DMA是否启用
+    pub fn dma_on_error_enabled(&self) -> bool {
+        self.registers.dma_on_error_enabled()
     }
 }
 

@@ -16,7 +16,7 @@ mod tests {
         mem::iomap,
     };
     use log::{debug, info};
-    use serial_async::{BaudRate, DataBits, FlowControl, Parity, StopBits, UartConfig};
+    use serial_async::{DataBits, FlowControl, Parity, StopBits, UartConfig};
     use some_serial::pl011;
 
     #[test]
@@ -33,12 +33,12 @@ mod tests {
 
         info!("Starting Loopback Test");
         uart.configure(&UartConfig {
-            baud_rate: BaudRate::Baud115200,
+            baud_rate: 115200,
             data_bits: DataBits::Eight,
             stop_bits: StopBits::One,
             parity: Parity::None,
             flow_control: FlowControl::None,
-        });
+        }).unwrap();
         uart.enable();
 
         // 清空任何残留的数据

@@ -168,6 +168,13 @@ register_bitfields! [
         PEIC OFFSET(8) NUMBITS(1) [],
         BEIC OFFSET(9) NUMBITS(1) [],
         OEIC OFFSET(10) NUMBITS(1) []
+    ],
+
+    /// DMA Control Register
+    UARTDMACR [
+        RXDMAE OFFSET(0) NUMBITS(1) [],
+        TXDMAE OFFSET(1) NUMBITS(1) [],
+        DMAONERR OFFSET(2) NUMBITS(1) []
     ]
 ];
 
@@ -188,7 +195,7 @@ register_structs! {
         (0x03c => uartris: ReadOnly<u32, UARTRIS::Register>),
         (0x040 => uartmis: ReadOnly<u32, UARTMIS::Register>),
         (0x044 => uarticr: WriteOnly<u32, UARTICR::Register>),
-        (0x048 => uartdmacr: ReadWrite<u32>),
+        (0x048 => uartdmacr: ReadWrite<u32, UARTDMACR::Register>),
         (0x04c => _reserved3),
         (0x1000 => @END),
     }
@@ -324,7 +331,7 @@ impl Registers for Impl {
         self.registers.uartcr.modify(UARTCR::LBE::CLEAR);
     }
 
-    fn set_baud_rate(&self, baud_rate: BaudRate) -> Result<(), SerialError> {
+    fn set_baud_rate(&self, baud_rate: usize) -> Result<(), SerialError> {
         // PL011 的波特率计算公式：
         // BAUDDIV = (FUARTCLK / (16 * Baud rate))
         // IBRD = integer(BAUDDIV)
@@ -332,7 +339,7 @@ impl Registers for Impl {
         //
         // 假设 FUARTCLK = 24MHz (常见的时钟频率)
         let uart_clk = self.clk_freq as u32;
-        let baud = baud_rate.as_u32();
+        let baud = baud_rate as u32;
 
         // 计算整数和小数部分
         let bauddiv = uart_clk / (16 * baud);
@@ -429,12 +436,66 @@ impl Registers for Impl {
 
         Ok(())
     }
+
+    fn dma_rx_enable(&self) {
+        // 启用接收DMA：设置RXDMAE位
+        self.registers.uartdmacr.modify(UARTDMACR::RXDMAE::SET);
+    }
+
+    fn dma_rx_disable(&self) {
+        // 禁用接收DMA：清除RXDMAE位
+        self.registers.uartdmacr.modify(UARTDMACR::RXDMAE::CLEAR);
+    }
+
+    fn dma_tx_enable(&self) {
+        // 启用发送DMA：设置TXDMAE位
+        self.registers.uartdmacr.modify(UARTDMACR::TXDMAE::SET);
+    }
+
+    fn dma_tx_disable(&self) {
+        // 禁用发送DMA：清除TXDMAE位
+        self.registers.uartdmacr.modify(UARTDMACR::TXDMAE::CLEAR);
+    }
+
+    fn dma_rx_enabled(&self) -> bool {
+        // 检查RXDMAE位是否设置
+        use tock_registers::interfaces::Readable;
+        self.registers.uartdmacr.is_set(UARTDMACR::RXDMAE)
+    }
+
+    fn dma_tx_enabled(&self) -> bool {
+        // 检查TXDMAE位是否设置
+        use tock_registers::interfaces::Readable;
+        self.registers.uartdmacr.is_set(UARTDMACR::TXDMAE)
+    }
+
+    fn dma_on_error_enable(&self) {
+        // 启用错误时禁用DMA：设置DMAONERR位
+        self.registers.uartdmacr.modify(UARTDMACR::DMAONERR::SET);
+    }
+
+    fn dma_on_error_disable(&self) {
+        // 禁用错误时禁用DMA：清除DMAONERR位
+        self.registers.uartdmacr.modify(UARTDMACR::DMAONERR::CLEAR);
+    }
+
+    fn dma_on_error_enabled(&self) -> bool {
+        // 检查DMAONERR位是否设置
+        use tock_registers::interfaces::Readable;
+        self.registers.uartdmacr.is_set(UARTDMACR::DMAONERR)
+    }
 }
 
 impl Impl {
     pub fn read_control_register(&self) -> u32 {
         use tock_registers::interfaces::Readable;
         self.registers.uartcr.get()
+    }
+
+    /// 读取DMA控制寄存器的值
+    pub fn read_dma_control_register(&self) -> u32 {
+        use tock_registers::interfaces::Readable;
+        self.registers.uartdmacr.get()
     }
 
     /// 完整配置UART（会暂时禁用UART）
