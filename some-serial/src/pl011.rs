@@ -1,3 +1,5 @@
+use core::ptr::NonNull;
+
 use serial_async::*;
 
 use tock_registers::{interfaces::*, register_bitfields, register_structs, registers::*};
@@ -206,10 +208,10 @@ unsafe impl Sync for Pl011Registers {}
 
 pub type Pl011 = Serial<Impl>;
 
-pub fn new(mmio: usize, clk_freq: usize) -> Pl011 {
+pub fn new(mmio: NonNull<u8>, clk_freq: usize) -> Pl011 {
     Pl011::new(Impl {
         clk_freq,
-        registers: unsafe { &*(mmio as *const Pl011Registers) },
+        registers: unsafe { &*(mmio.as_ptr() as *const Pl011Registers) },
     })
 }
 

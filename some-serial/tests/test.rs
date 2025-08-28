@@ -29,7 +29,7 @@ mod tests {
 
         debug!("base address: {base:p}, size: {size:#x}, clk {clk_freq}",);
 
-        let mut uart = pl011::new(base.as_ptr() as _, clk_freq);
+        let mut uart = pl011::new(base, clk_freq);
 
         info!("Starting Loopback Test");
         uart.configure(&UartConfig {
@@ -38,7 +38,8 @@ mod tests {
             stop_bits: StopBits::One,
             parity: Parity::None,
             flow_control: FlowControl::None,
-        }).unwrap();
+        })
+        .unwrap();
         uart.enable();
 
         // 清空任何残留的数据
